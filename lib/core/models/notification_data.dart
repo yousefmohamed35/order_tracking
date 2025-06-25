@@ -1,14 +1,10 @@
 class NotificationData {
-  final String? id;
-  final String? type;
+  final String? newState;
+  final String? oldState;
   final String action;
 
-  NotificationData({this.id, this.type, required this.action});
+  NotificationData({this.newState, this.oldState, required this.action});
   Map<String, dynamic> toJson() {
-    return {
-      "id":id,
-      "type":type,
-      "click_action":action,
-    };
+    return {"new_state": newState, "old_state": oldState, "click_action": action};
   }
 }

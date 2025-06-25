@@ -1,16 +1,23 @@
 import 'dart:developer';
 import 'package:dio/dio.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:googleapis_auth/auth_io.dart' as auth;
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:http/http.dart' as http;
 import 'package:ordertracking/core/models/notification_data.dart';
 import 'package:ordertracking/core/models/notification_load.dart';
-
+import '../../home/presentation/view/home_view.dart';
+import '../../main.dart';
 import '../models/notification_content.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 class FirebaseMessageHelper {
   final fcm = FirebaseMessaging.instance;
   final Dio dio = Dio();
+  final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
+      FlutterLocalNotificationsPlugin();
+  String? message;
   Future<void> requestPermission() async {
     NotificationSettings settings = await fcm.requestPermission();
     if (settings.authorizationStatus == AuthorizationStatus.authorized) {
@@ -23,10 +30,30 @@ class FirebaseMessageHelper {
     }
   }
 
+  Future<void> initLocalNotification() async {
+    final androidSettings = AndroidInitializationSettings(
+      '@mipmap/ic_launcher',
+    );
+    final iosSettings = DarwinInitializationSettings(
+      requestSoundPermission: true,
+      requestAlertPermission: true,
+      requestBadgePermission: true,
+    );
+    final settings = InitializationSettings(
+      android: androidSettings,
+      iOS: iosSettings,
+    );
+    await flutterLocalNotificationsPlugin.initialize(settings);
+  }
+
   Future<void> initNotification() async {
+    await initLocalNotification();
     await requestPermission();
     String? firebaseMessageToken = await fcm.getToken();
     log("firebase token: $firebaseMessageToken");
+    handleForegroundNotification();
+    handelterminatedNotificationClick();
+    handelBackgroundNotificationClick();
   }
 
   Future<String?> getAccessToken() async {
@@ -65,6 +92,7 @@ class FirebaseMessageHelper {
       return credentials.accessToken.data;
     } on Exception catch (e) {
       log("Error Catching token $e");
+      return null;
     }
   }
 
@@ -77,24 +105,88 @@ class FirebaseMessageHelper {
     try {
       var accessToken = await getAccessToken();
       var token = await fcm.getToken();
+      log('token : $token');
       dio.options.headers['Content-Type'] = 'application/json';
-      var response = await dio.post(url,
-          data: NotificationLoad(
+      dio.options.headers['Authorization'] = 'Bearer $accessToken';
+      var response = await dio.post(
+        url,
+        data:
+            NotificationLoad(
               token: token!,
               notificationData: NotificationData(
-                type: "type",
-                id: "userId",
+                oldState: "old_state",
+                newState: "new_state",
                 action: "FLUTTER_NOTIFICATION_CLICK",
               ),
               notificationContent: NotificationContent(
                 title: title,
                 body: body,
-              )).toJson());
+              ),
+            ).toJson(),
+      );
 
       log('Response Status Code: ${response.statusCode}');
       log('Response Data: ${response.data}');
     } catch (e) {
-       log("Error sending notification: $e");
+      log("Error sending notification: $e");
+    }
+  }
+
+  Future<void> handleForegroundNotification() async {
+    FirebaseMessaging.onMessage.listen((RemoteMessage message) async {
+     
+      RemoteNotification? notification = message.notification;
+      if (notification != null) {
+        await flutterLocalNotificationsPlugin.show(
+          notification.hashCode,
+          notification.title,
+          notification.body,
+          NotificationDetails(
+            android: AndroidNotificationDetails(
+              'high_importance_channel',
+              'High Importance Notifications',
+              channelDescription: 'Used for order updates',
+              importance: Importance.max,
+              priority: Priority.high,
+              icon: '@mipmap/ic_launcher',
+            ),
+            iOS: const DarwinNotificationDetails(
+              presentAlert: true,
+              presentBadge: true,
+              presentSound: true,
+            ),
+          ),
+        );
+      }
+    });
+  }
+
+  
+  Future<void> handelterminatedNotificationClick() async {
+    final message = await FirebaseMessaging.instance.getInitialMessage();
+    if (message != null) {
+       final FlutterSecureStorage secureStorage = FlutterSecureStorage();
+        final newStatus = message.notification?.body?.trim().split(' ').last;
+        await secureStorage.write(key: 'last', value: newStatus);
+      navigatorKey.currentState?.pushReplacement(
+        MaterialPageRoute(builder: (_) => const HomeView()),
+      );
+      navigatorKey.currentState?.pushReplacement(
+        MaterialPageRoute(builder: (_) => const HomeView()),
+      );
+    }
+  }
+
+  Future<void> handelBackgroundNotificationClick() async {
+    FirebaseMessaging.onMessageOpenedApp.listen(handleMessageOpen);
+  }
+
+  void handleMessageOpen(RemoteMessage? message) async{
+    if (message == null) return;
+    if (message.notification != null) {
+      navigatorKey.currentState?.pushReplacement(
+        MaterialPageRoute(builder: (_) => const HomeView()),
+      );
     }
   }
 }

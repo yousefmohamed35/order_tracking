@@ -134,7 +134,6 @@ class FirebaseMessageHelper {
 
   Future<void> handleForegroundNotification() async {
     FirebaseMessaging.onMessage.listen((RemoteMessage message) async {
-     
       RemoteNotification? notification = message.notification;
       if (notification != null) {
         await flutterLocalNotificationsPlugin.show(

@@ -2,7 +2,10 @@ import 'dart:developer';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:ordertracking/core/function/device_info.dart';
 import 'package:ordertracking/core/function/init_firebase.dart';
+import 'package:ordertracking/core/helper/service_locator.dart';
+import 'core/helper/huawei_message_helper.dart';
 import 'home/presentation/view/home_view.dart';
 
 @pragma('vm:entry-point')
@@ -19,7 +22,12 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
- await initializeFirebase();
+  if (await isHuaweiDevice()) {
+    await getIt.get<HuaweiMessageHelper>().initHuaweiNotification();
+  }
+  else{
+    await initializeFirebase();
+  }
 
   runApp(const MyApp());
 }

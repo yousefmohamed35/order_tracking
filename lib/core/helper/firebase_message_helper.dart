@@ -5,19 +5,18 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:googleapis_auth/auth_io.dart' as auth;
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:http/http.dart' as http;
+import 'package:ordertracking/core/helper/local_notification_helper.dart';
 import 'package:ordertracking/core/models/notification_data.dart';
 import 'package:ordertracking/core/models/notification_load.dart';
 import '../../home/presentation/view/home_view.dart';
 import '../../main.dart';
 import '../models/notification_content.dart';
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 class FirebaseMessageHelper {
   final fcm = FirebaseMessaging.instance;
   final Dio dio = Dio();
-  final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
-      FlutterLocalNotificationsPlugin();
-  String? message;
+  final LocalNotificationHelper localNotificationHelper =
+      LocalNotificationHelper();
   Future<void> requestPermission() async {
     NotificationSettings settings = await fcm.requestPermission();
     if (settings.authorizationStatus == AuthorizationStatus.authorized) {
@@ -30,28 +29,12 @@ class FirebaseMessageHelper {
     }
   }
 
-  Future<void> initLocalNotification() async {
-    final androidSettings = AndroidInitializationSettings(
-      '@mipmap/ic_launcher',
-    );
-    final iosSettings = DarwinInitializationSettings(
-      requestSoundPermission: true,
-      requestAlertPermission: true,
-      requestBadgePermission: true,
-    );
-    final settings = InitializationSettings(
-      android: androidSettings,
-      iOS: iosSettings,
-    );
-    await flutterLocalNotificationsPlugin.initialize(settings);
-  }
-
   Future<void> initNotification() async {
-    await initLocalNotification();
+    await localNotificationHelper.initLocalNotification();
     await requestPermission();
     String? firebaseMessageToken = await fcm.getToken();
     log("firebase token: $firebaseMessageToken");
-    handleForegroundNotification();
+    localNotificationHelper.handleForegroundNotification();
     handelterminatedNotificationClick();
     handelBackgroundNotificationClick();
   }
@@ -132,57 +115,23 @@ class FirebaseMessageHelper {
     }
   }
 
-  Future<void> handleForegroundNotification() async {
-    FirebaseMessaging.onMessage.listen((RemoteMessage message) async {
-      RemoteNotification? notification = message.notification;
-      if (notification != null) {
-        await flutterLocalNotificationsPlugin.show(
-          notification.hashCode,
-          notification.title,
-          notification.body,
-          NotificationDetails(
-            android: AndroidNotificationDetails(
-              'high_importance_channel',
-              'High Importance Notifications',
-              channelDescription: 'Used for order updates',
-              importance: Importance.max,
-              priority: Priority.high,
-              icon: '@mipmap/ic_launcher',
-            ),
-            iOS: const DarwinNotificationDetails(
-              presentAlert: true,
-              presentBadge: true,
-              presentSound: true,
-            ),
-          ),
-        );
-      }
-    });
-  }
-
-  
   Future<void> handelterminatedNotificationClick() async {
     final message = await FirebaseMessaging.instance.getInitialMessage();
     if (message != null) {
-       final FlutterSecureStorage secureStorage = FlutterSecureStorage();
-        final newStatus = message.notification?.body?.trim().split(' ').last;
-        await secureStorage.write(key: 'last', value: newStatus);
-      navigatorKey.currentState?.pushReplacement(
-        MaterialPageRoute(builder: (_) => const HomeView()),
-      );
-      navigatorKey.currentState?.pushReplacement(
-        MaterialPageRoute(builder: (_) => const HomeView()),
-      );
+      navigateAndSaveState(message);
+    } else {
+      return;
     }
   }
 
   Future<void> handelBackgroundNotificationClick() async {
-    FirebaseMessaging.onMessageOpenedApp.listen(handleMessageOpen);
+    FirebaseMessaging.onMessageOpenedApp.listen(navigateAndSaveState);
   }
 
-  void handleMessageOpen(RemoteMessage? message) async{
-    if (message == null) return;
-    if (message.notification != null) {
+  void navigateAndSaveState(RemoteMessage message) async {
+    final newStatus = message.notification?.body?.trim().split(' ').last;
+    if (newStatus != null) {
+      await const FlutterSecureStorage().write(key: 'last', value: newStatus);
       navigatorKey.currentState?.pushReplacement(
         MaterialPageRoute(builder: (_) => const HomeView()),
       );

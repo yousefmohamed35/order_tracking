@@ -1,6 +1,8 @@
 import 'dart:developer';
 import 'package:flutter/material.dart';
+import 'package:ordertracking/core/function/device_info.dart';
 import 'package:ordertracking/core/helper/firebase_message_helper.dart';
+import 'package:ordertracking/core/helper/huawei_message_helper.dart';
 import 'package:ordertracking/core/helper/service_locator.dart';
 import 'package:ordertracking/core/helper/secure_storage_helper.dart';
 import '../../../data/extensions/order_status_extension.dart';
@@ -43,10 +45,17 @@ class _HomeViewBodyState extends State<HomeViewBody> {
     });
 
     await secureStorage.save('last', to);
-    await getIt<FirebaseMessageHelper>().sendNotification(
-      title: 'Order Status Update with Ali',
-      body: 'Your order status changed from $from to $to',
-    );
+    if (await isHuaweiDevice()) {
+      await getIt.get<HuaweiMessageHelper>().sendHuaweiNotification(
+        title: 'Order Status Update with Ali',
+        body: 'Your order status changed from $from to $to',
+      );
+    } else {
+      await getIt<FirebaseMessageHelper>().sendNotification(
+        title: 'Order Status Update with Ali',
+        body: 'Your order status changed from $from to $to',
+      );
+    }
   }
 
   @override
